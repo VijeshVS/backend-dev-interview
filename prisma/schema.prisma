@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum ExperienceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  INTERNSHIP
+  CONTRACT
+  OTHER
+}
+
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+  VERY_HARD
+}
+
+model Users {
+  id            Int       @id @default(autoincrement())
+  name          String
+  email         String    @unique
+  password_hash String
+  role          UserRole  @default(USER)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  experiences   Experiences[]
+  upvotes       Experience_Upvotes[]
+  comments      Comments[]
+}
+
+model Experiences {
+  id               Int                @id @default(autoincrement())
+  user_id          Int
+  title            String
+  company_name     String
+  package_ctc      String
+  role             String?
+  job_type         JobType?
+  difficulty_level DifficultyLevel?
+  rounds_count     Int?
+  status           ExperienceStatus   @default(PENDING)
+  created_at       DateTime           @default(now())
+  updated_at       DateTime           @updatedAt
+
+  user             Users              @relation(fields: [user_id], references: [id])
+  rounds           Rounds[]
+  upvotes          Experience_Upvotes[]
+  comments         Comments[]
+}
+
+model Rounds {
+  id            Int       @id @default(autoincrement())
+  experience_id Int
+  round_order   Int
+  round_name    String
+  description   String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  experience    Experiences @relation(fields: [experience_id], references: [id])
+  codingProblems Coding_Problems[]
+  technicalQuestions Technical_Questions[]
+}
+
+model Coding_Problems {
+  id              Int      @id @default(autoincrement())
+  round_id        Int
+  title           String
+  link            String?
+  description     String?
+  constraints     String?
+  sample_testcases Json?
+  created_at      DateTime @default(now())
+
+  round           Rounds   @relation(fields: [round_id], references: [id])
+}
+
+model Technical_Questions {
+  id            Int      @id @default(autoincrement())
+  round_id      Int
+  question_text String
+  answer_text   String?
+  created_at    DateTime @default(now())
+
+  round         Rounds   @relation(fields: [round_id], references: [id])
+}
+
+model Experience_Upvotes {
+  user_id        Int
+  experience_id  Int
+  created_at     DateTime @default(now())
+
+  user           Users       @relation(fields: [user_id], references: [id])
+  experience     Experiences @relation(fields: [experience_id], references: [id])
+
+  @@id([user_id, experience_id])
+}
+
+model Comments {
+  id             Int      @id @default(autoincrement())
+  user_id        Int
+  experience_id  Int
+  comment_text   String
+  created_at     DateTime @default(now())
+
+  user           Users      @relation(fields: [user_id], references: [id])
+  experience     Experiences @relation(fields: [experience_id], references: [id])
+}
