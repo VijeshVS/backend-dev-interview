@@ -62,7 +62,7 @@ model Experiences {
   created_at       DateTime           @default(now())
   updated_at       DateTime           @updatedAt
 
-  user             Users              @relation(fields: [user_id], references: [id])
+  user             Users              @relation(fields: [user_id], references: [id], onDelete: Cascade)
   rounds           Rounds[]
   upvotes          Experience_Upvotes[]
   comments         Comments[]
@@ -77,7 +77,7 @@ model Rounds {
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
 
-  experience    Experiences @relation(fields: [experience_id], references: [id])
+  experience    Experiences @relation(fields: [experience_id], references: [id], onDelete: Cascade)
   codingProblems Coding_Problems[]
   technicalQuestions Technical_Questions[]
 }
@@ -92,7 +92,7 @@ model Coding_Problems {
   sample_testcases Json?
   created_at      DateTime @default(now())
 
-  round           Rounds   @relation(fields: [round_id], references: [id])
+  round           Rounds   @relation(fields: [round_id], references: [id], onDelete: Cascade)
 }
 
 model Technical_Questions {
@@ -102,7 +102,7 @@ model Technical_Questions {
   answer_text   String?
   created_at    DateTime @default(now())
 
-  round         Rounds   @relation(fields: [round_id], references: [id])
+  round         Rounds   @relation(fields: [round_id], references: [id], onDelete: Cascade)
 }
 
 model Experience_Upvotes {
@@ -110,8 +110,8 @@ model Experience_Upvotes {
   experience_id  Int
   created_at     DateTime @default(now())
 
-  user           Users       @relation(fields: [user_id], references: [id])
-  experience     Experiences @relation(fields: [experience_id], references: [id])
+  user           Users       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  experience     Experiences @relation(fields: [experience_id], references: [id], onDelete: Cascade)
 
   @@id([user_id, experience_id])
 }
@@ -123,6 +123,6 @@ model Comments {
   comment_text   String
   created_at     DateTime @default(now())
 
-  user           Users      @relation(fields: [user_id], references: [id])
-  experience     Experiences @relation(fields: [experience_id], references: [id])
+  user           Users      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  experience     Experiences @relation(fields: [experience_id], references: [id], onDelete: Cascade)
 }

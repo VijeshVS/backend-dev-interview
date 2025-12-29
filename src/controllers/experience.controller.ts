@@ -2,6 +2,7 @@ import prisma from "../config/db";
 import { Request, Response } from "express";
 
 async function getFullExperience(id: number, userId?: number) {
+  if(!id) id = 0
   return prisma.experiences.findUnique({
     where: { id },
     include: {
@@ -178,11 +179,41 @@ export const deleteExperience = async (req: Request, res: Response) => {
 
     const exists = await prisma.experiences.findUnique({ where: { id } });
     if (!exists) return res.status(404).json({ message: "Not found" });
-    if (exists.user_id !== userId) return res.status(403).json({ message: "Forbidden" });
+    if (Number(exists.user_id) !== Number(userId)) return res.status(403).json({ message: "Forbidden" });
 
     await prisma.experiences.delete({ where: { id } });
 
     res.json({ success: true, message: "Deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// Get all experiences created by logged-in user
+export const getMyExperiences = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const experiences = await prisma.experiences.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: "desc" },
+      select: {
+        id: true,
+        title: true,
+        company_name: true,
+        created_at: true,
+        status: true,
+        rounds_count: true
+      }
+    });
+
+    return res.json({
+      success: true,
+      count: experiences.length,
+      data: experiences
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server Error" });
