@@ -18,7 +18,7 @@ export const register = async (req: Request, res: Response) => {
 
     const user = await prisma.users.create({
       data: { name, email, password_hash: hash },
-      select: { id: true, name: true, email: true, created_at: true }
+      select: { id: true, name: true, email: true, role: true, created_at: true }
     });
 
     const token = signToken(user.id);
@@ -49,6 +49,7 @@ export const login = async (req: Request, res: Response) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         created_at: user.created_at
       }
     });

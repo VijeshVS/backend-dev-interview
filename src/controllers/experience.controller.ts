@@ -86,9 +86,23 @@ export const getExperiences = async (req: Request, res: Response) => {
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const offset = Number(req.query.offset) || 0;
 
-    const items = await prisma.experiences.findMany({});
+    // Only return approved experiences for normal users
+    const items = await prisma.experiences.findMany({
+      where: {
+        status: "APPROVED"
+      },
+      take: limit,
+      skip: offset,
+      orderBy: { created_at: "desc" }
+    });
 
-    res.json({ success: true, limit, offset, items });
+    const total = await prisma.experiences.count({
+      where: {
+        status: "APPROVED"
+      }
+    });
+
+    res.json({ success: true, limit, offset, items, total });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server Error" });
@@ -97,10 +111,27 @@ export const getExperiences = async (req: Request, res: Response) => {
 
 export const getExperienceById = async (req: Request, res: Response) => {
   try {
-    const exp = await getFullExperience(Number(req.params.id));
+    const experienceId = Number(req.params.id);
+    const userId = (req as any).user; // May be undefined if not authenticated
+    
+    const exp = await getFullExperience(experienceId);
     if (!exp) return res.status(404).json({ message: "Not found" });
 
-    return res.json({ success: true, data: exp });
+    // Check if user is the owner of this experience
+    const isOwner = userId && Number(exp.user_id) === Number(userId);
+    const isApproved = exp.status === "APPROVED";
+
+    // Allow access if:
+    // 1. User is the owner (can view their own experience regardless of status)
+    // 2. Experience is approved (anyone can view approved experiences)
+    if (isOwner || isApproved) {
+      return res.json({ success: true, data: exp });
+    }
+
+    // Block access if not owner and not approved
+    return res.status(403).json({ 
+      message: "This experience is not available for viewing" 
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server Error" });
@@ -217,5 +248,90 @@ export const getMyExperiences = async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// Admin-specific methods
+
+export const getPendingExperiences = async (req: Request, res: Response) => {
+  try {
+    const experiences = await prisma.experiences.findMany({
+      where: { status: "PENDING" },
+      orderBy: { created_at: "desc" },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+    res.json({
+      success: true,
+      data: experiences,
+      count: experiences.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching pending experiences", error });
+  }
+};
+
+export const updateExperienceStatus = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!["APPROVED", "REJECTED"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const updatedExperience = await prisma.experiences.update({
+      where: { id: Number(id) },
+      data: { status },
+    });
+
+    res.json({ success: true, data: updatedExperience });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating experience status", error });
+  }
+};
+
+export const deleteAnyExperience = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.experiences.delete({
+      where: { id: Number(id) },
+    });
+
+    res.json({ success: true, message: "Experience deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting experience", error });
+  }
+};
+
+export const getAllExperiences = async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const offset = Number(req.query.offset) || 0;
+
+    const experiences = await prisma.experiences.findMany({
+      take: limit,
+      skip: offset,
+      orderBy: { created_at: "desc" },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    const total = await prisma.experiences.count();
+
+    res.json({
+      success: true,
+      data: experiences,
+      total,
+      limit,
+      offset
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching experiences", error });
   }
 };
