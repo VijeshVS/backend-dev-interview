@@ -11,6 +11,7 @@ import {
   updateExperienceStatus,
   deleteAnyExperience,
   getAllExperiences,
+  createFuzzyExperience,
 } from "../controllers/experience.controller";
 
 const router = Router();
@@ -19,6 +20,7 @@ router.get("/", getExperiences);
 router.get("/mine", isAuth, getMyExperiences);
 router.get("/:id", optionalAuth, getExperienceById);
 router.post("/", isAuth, createExperience);
+router.post("/fuzzy", isAuth, createFuzzyExperience);
 router.put("/:id", isAuth, updateExperience);
 router.delete("/:id", isAuth, deleteExperience);
 

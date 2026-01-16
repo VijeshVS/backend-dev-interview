@@ -1,5 +1,10 @@
 import prisma from "../config/db";
 import { Request, Response } from "express";
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 async function getFullExperience(id: number, userId?: number) {
   if(!id) id = 0
@@ -40,7 +45,9 @@ export const createExperience = async (req: Request, res: Response) => {
 
     const experience = await prisma.experiences.create({
       data: {
-        user_id: userId,
+        user: {
+          connect: { id: userId }
+      },
         title,
         company_name,
         package_ctc,
@@ -333,5 +340,149 @@ export const getAllExperiences = async (req: Request, res: Response) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching experiences", error });
+  }
+};
+
+const SYSTEM_PROMPT = `
+You are a strict backend data extraction engine.
+
+Your job:
+Convert unstructured or fuzzy interview experience text into a JSON object that can be directly inserted into a database using Prisma.
+
+ABSOLUTE RULES:
+- Output ONLY valid JSON
+- No markdown, no comments, no explanations
+- Do NOT hallucinate facts
+- If information is missing, use null or empty arrays
+- Follow enum values EXACTLY as defined
+- The JSON must match the schema below
+
+-----------------------------------
+TARGET JSON SCHEMA
+-----------------------------------
+
+{
+  "title": string,
+  "company_name": string,
+  "package_ctc": string,
+  "role": string,
+  "job_type": "FULL_TIME" | "PART_TIME" | "INTERNSHIP" | "CONTRACT" | "OTHER" | null,
+  "difficulty_level": "EASY" | "MEDIUM" | "HARD" | "VERY_HARD" | null,
+  "rounds": [
+    {
+      "round_order": number,
+      "round_name": string (For eg: technical round, hr round, coding round),
+      "description": string,
+      "coding_problems": [
+        {
+          "title": string,
+          "link": string | null,
+          "description": string | null,
+          "constraints": string | null,
+          "sample_testcases": string | null
+        }
+      ],
+      "technical_questions": [
+        {
+          "question_text": string,
+          "answer_text": string | null
+        }
+      ]
+    }
+  ]
+}
+
+-----------------------------------
+ENUM INFERENCE RULES
+-----------------------------------
+
+JobType:
+- full time / permanent / fte → FULL_TIME
+- part time → PART_TIME
+- intern / internship → INTERNSHIP
+- contract → CONTRACT
+- anything else unclear → OTHER
+
+DifficultyLevel:
+- easy / simple → EASY
+- moderate / medium → MEDIUM
+- hard / tough → HARD
+- very hard / extremely difficult → VERY_HARD
+
+-----------------------------------
+ROUND RULES
+-----------------------------------
+- If rounds are mentioned, extract them in order
+- If only a number of rounds is mentioned but no details, create empty rounds with names like "Round 1"
+- round_order must start from 1
+- If no rounds mentioned, return an empty array
+
+-----------------------------------
+TITLE RULES
+-----------------------------------
+- Max 10 words
+- Should summarize company + role + interview
+- Example: "Google SDE Internship Interview"
+
+-----------------------------------
+FAILURE CONDITION
+-----------------------------------
+If the input is NOT an interview experience, return:
+{
+  "title": null,
+  "company_name": null,
+  "package_ctc": null,
+  "role": null,
+  "job_type": null,
+  "difficulty_level": null,
+  "rounds": []
+}
+`;
+
+export const createFuzzyExperience = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { text } = req.body;
+    if (!text || typeof text !== "string") {
+      return res.status(400).json({ message: "text is required" });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: text }
+      ]
+    });
+
+    let parsed;
+    try {
+      const raw = completion.choices[0].message.content as string;
+      parsed = JSON.parse(raw);
+    } catch {
+      return res.status(422).json({
+        message: "Invalid JSON from model",
+        raw: completion.choices[0].message.content
+      });
+    }
+
+    // Hard validation (don’t trust AI)
+    if (!parsed.title || !parsed.company_name || !parsed.package_ctc || !parsed.rounds) {
+      return res.status(400).json({
+        message: "Could not extract required fields",
+        parsed
+      });
+    }
+
+    // Inject parsed body into existing flow
+    req.body = parsed;
+
+    return createExperience(req, res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server Error" });
   }
 };
